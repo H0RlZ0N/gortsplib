@@ -4,6 +4,7 @@ package sdp
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"strconv"
 	"strings"
@@ -87,8 +88,8 @@ func stringsReverseIndexByte(s string, b byte) int {
 // This is rewritten from scratch to make it compatible with most RTSP
 // implementations.
 func (s *SessionDescription) unmarshalOrigin(value string) error {
+	//value = "- 1001 1 IN "
 	value = strings.Replace(value, " IN IPV4 ", " IN IP4 ", 1)
-
 	if strings.HasSuffix(value, "IN IP4") {
 		value += " "
 	}
@@ -96,15 +97,17 @@ func (s *SessionDescription) unmarshalOrigin(value string) error {
 	i := strings.Index(value, " IN IP4 ")
 	if i < 0 {
 		i = strings.Index(value, " IN IP6 ")
-		if i < 0 {
-			return fmt.Errorf("%w `o=%v`", errSDPInvalidSyntax, value)
-		}
 	}
 
-	s.Origin.NetworkType = value[i+1 : i+3]
-	s.Origin.AddressType = value[i+4 : i+7]
-	s.Origin.UnicastAddress = strings.TrimSpace(value[i+8:])
-	value = value[:i]
+	if i >= 0 {
+		s.Origin.NetworkType = value[i+1 : i+3]
+		s.Origin.AddressType = value[i+4 : i+7]
+		s.Origin.UnicastAddress = strings.TrimSpace(value[i+8:])
+		value = value[:i]
+	} else {
+		i = strings.Index(value, " IN")
+		value = value[:i]
+	}
 
 	i = stringsReverseIndexByte(value, ' ')
 	if i < 0 {
@@ -154,6 +157,8 @@ func (s *SessionDescription) unmarshalOrigin(value string) error {
 	}
 
 	s.Origin.Username = value
+
+	log.Printf("=============> unmarshalOrigin SessionVersion: %v SessionID: %v Username: %v\n", s.Origin.SessionVersion, s.Origin.SessionID, s.Origin.Username)
 
 	return nil
 }
@@ -226,7 +231,7 @@ func (s *SessionDescription) unmarshalSessionConnectionInformation(value string)
 	var err error
 	s.ConnectionInformation, err = unmarshalConnectionInformation(value)
 	if err != nil {
-		return fmt.Errorf("%w `c=%v`", errSDPInvalidSyntax, value)
+		return nil //fmt.Errorf("%w `c=%v`", errSDPInvalidSyntax, value)
 	}
 
 	return nil
@@ -490,7 +495,7 @@ func (s *SessionDescription) unmarshalMediaConnectionInformation(value string) e
 	var err error
 	latestMediaDesc.ConnectionInformation, err = unmarshalConnectionInformation(value)
 	if err != nil {
-		return fmt.Errorf("%w `c=%v`", errSDPInvalidSyntax, value)
+		return nil //fmt.Errorf("%w `c=%v`", errSDPInvalidSyntax, value)
 	}
 
 	return nil
@@ -675,6 +680,8 @@ func (s *SessionDescription) unmarshalMedia(key byte, val string) error {
 // implementations.
 func (s *SessionDescription) Unmarshal(byts []byte) error {
 	str := string(byts)
+
+	//log.Printf("============================> Unmarshal SDP: \n [ %s ]\n\n", str)
 
 	state := stateInitial
 
